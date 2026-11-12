@@ -5,6 +5,9 @@ import type { HermesConnection } from '@/global'
 import { $connection } from '@/store/session'
 import { stubResizeObserver } from '@/test/jsdom'
 
+import { group, split } from '../model'
+import { $layoutTree, mirrorLayoutTree } from '../store'
+
 import { usePanelTitlebar } from './panel-titlebar'
 
 // The panel tab strip (SESSIONS | BOTS) reserves the width the fixed titlebar
@@ -45,6 +48,7 @@ afterEach(() => {
   document.body.innerHTML = ''
   vi.unstubAllGlobals()
   $connection.set(null)
+  $layoutTree.set(null)
 })
 
 describe('usePanelTitlebar', () => {
@@ -86,5 +90,27 @@ describe('usePanelTitlebar', () => {
     })
 
     expect(element.style.getPropertyValue('--panel-titlebar-left')).toBe('172px')
+  })
+
+  it('re-measures when a layout flip moves the zone to the other edge at the same size', () => {
+    $layoutTree.set(split('row', [group(['sessions'], { id: 'side' }), group(['workspace'], { id: 'main' })], [1, 3]))
+    let zoneLeft = 0
+    const element = document.createElement('div')
+    element.getBoundingClientRect = () => rect(zoneLeft, 240)
+    document.body.append(element)
+    const ref = { current: element }
+
+    renderHook(() => usePanelTitlebar(ref, true, false))
+    // On the left edge the sidebar is clear of the right cluster.
+    expect(element.style.getPropertyValue('--panel-titlebar-right')).toBe('0px')
+
+    // The flip reorders the zones without resizing or remounting them: a pure
+    // translate. A stale 0px let the flex-1 drag handle run under the right
+    // cluster, turning clicks on Flip / HUD / right sidebar into window drags.
+    zoneLeft = 760
+    act(() => mirrorLayoutTree())
+
+    expect(element.style.getPropertyValue('--panel-titlebar-left')).toBe('0px')
+    expect(element.style.getPropertyValue('--panel-titlebar-right')).toBe('100px')
   })
 })

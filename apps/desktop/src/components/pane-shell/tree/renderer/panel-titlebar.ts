@@ -4,6 +4,8 @@ import { TITLEBAR_CHROME_CHANGED_EVENT } from '@/app/shell/titlebar'
 import { useResizeObserver } from '@/hooks/use-resize-observer'
 import { $connection } from '@/store/session'
 
+import { $layoutTree } from '../store'
+
 /** The window-chrome inputs that move the fixed titlebar clusters without
  *  changing their size (macOS fullscreen hides the traffic lights → the left
  *  cluster pins to the window edge). */
@@ -90,6 +92,13 @@ export function usePanelTitlebar(ref: RefObject<HTMLElement | null>, enabled: bo
     let lastChrome = chromeKey()
     let frame = 0
 
+    const measureAfterPaint = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        frame = requestAnimationFrame(measure)
+      })
+    }
+
     const unsubscribeChrome = $connection.subscribe(() => {
       const nextChrome = chromeKey()
 
@@ -98,17 +107,22 @@ export function usePanelTitlebar(ref: RefObject<HTMLElement | null>, enabled: bo
       }
 
       lastChrome = nextChrome
-      cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(() => {
-        frame = requestAnimationFrame(measure)
-      })
+      measureAfterPaint()
     })
+
+    // A tree edit can move a zone to another edge at the same size (the flip
+    // mirror, a drag across, a mirrored preset). Zones are keyed by id, so
+    // React moves the node without remounting and no observer fires — a
+    // sidebar flipped right kept its left-edge `right: 0px`, and its flex-1
+    // drag handle ran under the right cluster, swallowing its clicks.
+    const unsubscribeTree = $layoutTree.listen(measureAfterPaint)
 
     return () => {
       observer.disconnect()
       window.removeEventListener('resize', measure)
       window.removeEventListener(TITLEBAR_CHROME_CHANGED_EVENT, onChromeChanged)
       unsubscribeChrome()
+      unsubscribeTree()
       cancelAnimationFrame(frame)
     }
   }, [enabled, measure])
