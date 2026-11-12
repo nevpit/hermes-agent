@@ -93,9 +93,7 @@ describe('usePanelTitlebar', () => {
   })
 
   it('re-measures when a layout flip moves the zone to the other edge at the same size', () => {
-    $layoutTree.set(
-      split('row', [group(['sessions'], { id: 'side' }), group(['workspace'], { id: 'main' })], [1, 3])
-    )
+    $layoutTree.set(split('row', [group(['sessions'], { id: 'side' }), group(['workspace'], { id: 'main' })], [1, 3]))
     let zoneLeft = 0
     const element = document.createElement('div')
     element.getBoundingClientRect = () => rect(zoneLeft, 240)
